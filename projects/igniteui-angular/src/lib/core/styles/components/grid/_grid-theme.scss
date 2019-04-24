@@ -796,6 +796,16 @@
         cursor: move;
     }
 
+    %igx-grid__drag-indicator--cosy{
+        padding: map-get($grid-cell-padding, 'cosy');
+        padding-right: 0;
+    }
+
+    %igx-grid__drag-indicator--compact {
+        padding: map-get($grid-cell-padding, 'compact');
+        padding-right: 0;
+    }
+
     %igx-grid__drag-indicator--off {
         color: --var($theme, 'row-drag-color');
     }
