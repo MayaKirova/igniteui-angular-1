@@ -81,6 +81,10 @@ export abstract class IgxHierarchicalGridBaseComponent extends IgxGridBaseCompon
 
     protected _expandChildren = false;
 
+    /**
+     * @hidden
+     * @internal
+     */
     @ViewChild('dragIndicatorIconBase', { read: TemplateRef })
     public dragIndicatorIconBase: TemplateRef<any>;
 
@@ -122,6 +126,26 @@ export abstract class IgxHierarchicalGridBaseComponent extends IgxGridBaseCompon
             _displayDensityOptions);
         this.hgridAPI = <IgxHierarchicalGridAPIService>gridAPI;
     }
+
+    /**
+     * The custom template, if any, that should be used when rendering the row drag indicator icon
+     *
+     * ```typescript
+     * // Set in typescript
+     * const myCustomTemplate: TemplateRef<any> = myComponent.customTemplate;
+     * myComponent.dragIndicatorIconTemplate = myCustomTemplate;
+     * ```
+     * ```html
+     * <!-- Set in markup -->
+     *  <igx-grid #grid>
+     *      ...
+     *      <ng-template igxDragIndicatorIcon>
+     *          <igx-icon fontSet="material">info</igx-icon>
+     *      </ng-template>
+     *  </igx-grid>
+     * ```
+     */
+    public dragIndicatorIconTemplate: TemplateRef<any> = null;
 
     /**
      * @hidden

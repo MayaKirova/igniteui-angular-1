@@ -552,6 +552,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
 
     /**
      * @hidden
+     * @internal
      */
     public rowDragging = false;
 
@@ -720,7 +721,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     }
     public set columnWidth(value: string) {
         this._columnWidth = value;
-        this._columnWidthSetByUser = true;
+        this.columnWidthSetByUser = true;
     }
 
     /**
@@ -1530,26 +1531,6 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     @ContentChild(IgxExcelStylePinningTemplateDirective, { read: IgxExcelStylePinningTemplateDirective })
     public excelStylePinningTemplateDirective: IgxExcelStylePinningTemplateDirective;
 
-    /**
-     * The custom template, if any, that should be used when rendering the row drag indicator icon
-     *
-     * ```typescript
-     * // Set in typescript
-     * const myCustomTemplate: TemplateRef<any> = myComponent.customTemplate;
-     * myComponent.dragIndicatorIconTemplate = myCustomTemplate;
-     * ```
-     * ```html
-     * <!-- Set in markup -->
-     *  <igx-grid #grid>
-     *      ...
-     *      <ng-template igxDragIndicatorIcon>
-     *          <igx-icon fontSet="material">info</igx-icon>
-     *      </ng-template>
-     *  </igx-grid>
-     * ```
-     */
-    @ContentChild(IgxDragIndicatorIconDirective, { read: TemplateRef })
-    public dragIndicatorIconTemplate: TemplateRef<any> = null;
 
     /**
      * @hidden
@@ -1804,6 +1785,10 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
         return null;
     }
 
+    /**
+     * @hidden
+     * @internal
+     */
     @ViewChild('dragIndicatorIconBase', { read: TemplateRef })
     public dragIndicatorIconBase: TemplateRef<any>;
 
@@ -2352,10 +2337,6 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     /**
      * @hidden
      */
-    public calcFixedWidth = 0;
-    /**
-     * @hidden
-     */
     public calcHeight = 0;
     /**
      * @hidden
@@ -2395,6 +2376,11 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
         activeMatchIndex: 0,
         matchInfoCache: []
     };
+
+    /**
+     * @hidden
+     */
+    public columnWidthSetByUser = false;
 
     abstract data: any[];
     abstract filteredData: any[];
@@ -2503,7 +2489,6 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     private _columnGroups = false;
 
     private _columnWidth: string;
-    private _columnWidthSetByUser = false;
 
     private _defaultTargetRecordNumber = 10;
 
@@ -2643,13 +2628,11 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
             }
         });
 
-        this.onFilteringDone.pipe(destructor).subscribe(() => this.endEdit(true));
         this.onPagingDone.pipe(destructor).subscribe(() => {
             this.endEdit(true);
             this.selectionService.clear();
             this.selectionService.activeElement = null;
         });
-        this.onSortingDone.pipe(destructor).subscribe(() => this.endEdit(true));
 
         this.onColumnMoving.pipe(destructor).subscribe(() => this.endEdit(true));
         this.onColumnResized.pipe(destructor).subscribe(() => this.endEdit(true));
@@ -2888,10 +2871,10 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     get headerFixedWidth() {
         let width = 0;
         if (this.headerCheckboxContainer) {
-            width += this.headerCheckboxContainer.nativeElement.clientWidth;
+            width += this.headerCheckboxContainer.nativeElement.getBoundingClientRect().width;
         }
         if (this.headerDragContainer) {
-            width += this.headerDragContainer.nativeElement.clientWidth;
+            width += this.headerDragContainer.nativeElement.getBoundingClientRect().width;
         }
 
         return width;
@@ -2993,7 +2976,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
      * @hidden
      */
     get summariesMargin() {
-        return this.rowSelectable || this.rowDraggable ? this.calcFixedWidth : 0;
+        return this.rowSelectable || this.rowDraggable ? this.headerFixedWidth : 0;
     }
 
     /**
@@ -3946,7 +3929,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
      * Sets columns defaultWidth property
      */
     protected _derivePossibleWidth() {
-        if (!this._columnWidthSetByUser) {
+        if (!this.columnWidthSetByUser) {
             this._columnWidth = this.getPossibleColumnWidth();
             this.columnList.forEach((column: IgxColumnComponent) => {
                 column.defaultWidth = this._columnWidth;
@@ -4088,11 +4071,22 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
         }
 
         const visibleChildColumns = this.visibleColumns.filter(c => !c.columnGroup);
-        const blockColumns = this.visibleColumns.filter(c => c.columnGroup);
 
-        const columnsWithSetWidths = visibleChildColumns.filter(c => c.widthSetByUser);
+
+        // Column layouts related
+        let visibleCols = [];
+        const columnBlocks = this.visibleColumns.filter(c => c.columnGroup);
+        const colsPerBlock = columnBlocks.map(block => block.getInitialChildColumnSizes(block.children.toArray()));
+        const combinedBlocksSize = colsPerBlock.reduce((acc, item) => acc + item.length, 0);
+        colsPerBlock.forEach(blockCols => visibleCols = visibleCols.concat(blockCols));
+        //
+
+        const columnsWithSetWidths = this.hasColumnLayouts ?
+            visibleCols.filter(c => c.widthSetByUser) :
+            visibleChildColumns.filter(c => c.widthSetByUser);
+
         const columnsToSize = this.hasColumnLayouts ?
-            this.getPossibleBlocksWidth(blockColumns) - columnsWithSetWidths.length :
+            combinedBlocksSize - columnsWithSetWidths.length :
             visibleChildColumns.length - columnsWithSetWidths.length;
 
         const sumExistingWidths = columnsWithSetWidths
@@ -4110,12 +4104,6 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
             Math.max((computedWidth - sumExistingWidths) / columnsToSize, MINIMUM_COLUMN_WIDTH));
 
         return columnWidth.toString();
-    }
-
-    private getPossibleBlocksWidth(blocks) {
-        const maxColEndPerBlock = (max, child) => Math.max(max, child.colStart + child.gridColumnSpan - 1);
-        const sumMaximalColSpans = (acc, col) => acc + col.children.reduce(maxColEndPerBlock, 1);
-        return blocks.reduce(sumMaximalColSpans, 0);
     }
 
     /**
@@ -4217,16 +4205,6 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
         this.resetCaches();
         this.calculateGridHeight();
 
-        this.calcFixedWidth = 0;
-        if (this.showRowCheckboxes) {
-            this.calcFixedWidth += this.headerCheckboxContainer.nativeElement.getBoundingClientRect().width;
-        }
-
-        if (this.rowDraggable) {
-            this.calcFixedWidth += this.headerDragContainer.nativeElement.getBoundingClientRect().width;
-        }
-
-
         if (this.rowEditable) {
             this.repositionRowEditingOverlay(this.rowInEditMode);
         }
@@ -4257,7 +4235,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
                 sum += parseInt(col.width, 10);
             }
         }
-        sum += this.calcFixedWidth;
+        sum += this.headerFixedWidth;
 
         return sum;
     }
@@ -4786,10 +4764,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
             return 0;
         }
 
-        const editModeCell = this.crudService.cell;
-        if (editModeCell) {
-                this.endEdit(false);
-        }
+        this.endEdit(false);
 
         if (!text) {
             this.clearSearch();
