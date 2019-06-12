@@ -17,7 +17,7 @@ export const configureTestSuite = () => {
     const testBedApi: any = getTestBed();
     testBedApi._activeFixtures.forEach((fixture: ComponentFixture<any>) => fixture.destroy());
     testBedApi._instantiated = false;
-    // use when memory profiling tests
+    // use when memory profiling tests.
     // (window as any).gc();
   });
 
