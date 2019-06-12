@@ -23,7 +23,9 @@ import {
     ViewChildren,
     ViewContainerRef,
     InjectionToken,
-    Optional
+    Optional,
+    OnChanges,
+    SimpleChanges
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil, first, filter } from 'rxjs/operators';
@@ -233,11 +235,17 @@ export enum GridKeydownTargetType {
     hierarchicalRow = 'hierarchicalRow'
 }
 
-export abstract class IgxGridBaseComponent extends DisplayDensityBase implements OnInit, OnDestroy, AfterContentInit, AfterViewInit {
+// tslint:disable-next-line: max-line-length
+export abstract class IgxGridBaseComponent extends DisplayDensityBase implements OnInit, OnChanges, OnDestroy, AfterContentInit, AfterViewInit {
     private _scrollWidth: number;
+    private _init = true;
 
     public get scrollWidth() {
         return this._scrollWidth;
+    }
+
+    protected get initState() {
+        return this._init;
     }
 
     private _resourceStrings = CurrentResourceStrings.GridResStrings;
@@ -619,9 +627,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     @WatchChanges()
     @HostBinding('style.height')
     @Input()
-    public get height() {
-        return this._height;
-    }
+    height = '100%';
 
     /**
      * Sets the height of the `IgxGridComponent`.
@@ -630,17 +636,17 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
      * ```
 	 * @memberof IgxGridBaseComponent
      */
-    public set height(value: string) {
-        if (this._height !== value) {
-            this._height = value;
-            requestAnimationFrame(() => {
-                if (!this._destroyed) {
-                    this.reflow();
-                    this.cdr.markForCheck();
-                }
-            });
-        }
-    }
+    // public set height(value: string) {
+    //     if (this._height !== value) {
+    //         this._height = value;
+    //         requestAnimationFrame(() => {
+    //             if (!this._destroyed) {
+    //                 this.reflow();
+    //                 this.cdr.markForCheck();
+    //             }
+    //         });
+    //     }
+    // }
 
     /**
      * Returns the width of the `IgxGridComponent`.
@@ -652,9 +658,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     @WatchChanges()
     @HostBinding('style.width')
     @Input()
-    public get width() {
-        return this._width;
-    }
+    width = '100%';
 
     /**
      * Sets the width of the `IgxGridComponent`.
@@ -663,30 +667,19 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
      * ```
 	 * @memberof IgxGridBaseComponent
      */
-    public set width(value: string) {
-        if (this._width !== value) {
-            this._width = value;
-            requestAnimationFrame(() => {
-                // Calling reflow(), because the width calculation
-                // might make the horizontal scrollbar appear/disappear.
-                // This will change the height, which should be recalculated.
-                if (!this._destroyed) {
-                    this.reflow();
-                }
-            });
-        }
-    }
-
-    /**
-     * Returns the width of the header of the `IgxGridComponent`.
-     * ```html
-     * let gridHeaderWidth = this.grid.headerWidth;
-     * ```
-	 * @memberof IgxGridBaseComponent
-     */
-    get headerWidth() {
-        return parseInt(this._width, 10) - 17;
-    }
+    // public set width(value: string) {
+    //     if (this._width !== value) {
+    //         this._width = value;
+    //         requestAnimationFrame(() => {
+    //             // Calling reflow(), because the width calculation
+    //             // might make the horizontal scrollbar appear/disappear.
+    //             // This will change the height, which should be recalculated.
+    //             if (!this._destroyed) {
+    //                 this.reflow();
+    //             }
+    //         });
+    //     }
+    // }
 
     /**
      * An @Input property that adds styling classes applied to all even `IgxGridRowComponent`s in the grid.
@@ -2512,8 +2505,6 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     private columnListDiffer;
     private _hiddenColumnsText = '';
     private _pinnedColumnsText = '';
-    private _height = '100%';
-    private _width = '100%';
     private _rowHeight;
     protected _ngAfterViewInitPassed = false;
     private _horizontalForOfs;
@@ -2634,6 +2625,9 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
         public summaryService: IgxGridSummaryService,
         @Optional() @Inject(DisplayDensityToken) protected _displayDensityOptions: IDisplayDensityOptions) {
         super(_displayDensityOptions);
+
+        this.cdr.detach();
+
         this.resizeHandler = () => {
             this.zone.run(() => this.calculateGridSizes());
         };
@@ -2698,9 +2692,17 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
         this._setupServices();
         this._setupListeners();
         this.columnListDiffer = this.differs.find([]).create(null);
-        this.calcWidth = this._width && this._width.indexOf('%') === -1 ? parseInt(this._width, 10) : 0;
+        this.calcWidth = this.width && this.width.indexOf('%') === -1 ? parseInt(this.width, 10) : 0;
         this.shouldGenerate = this.autoGenerate;
         this._scrollWidth = this.getScrollWidth();
+    }
+
+    ngOnChanges(changes: SimpleChanges) {
+        if (this._init) { return; }
+        const { height, width } = changes;
+        if (height || width) {
+            this.calculateGridSizes();
+        }
     }
 
     protected setupColumns() {
@@ -2848,6 +2850,10 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
                 }
             });
         });
+
+        this._init = false;
+        this.cdr.detectChanges();
+        this.cdr.reattach();
     }
 
     private combineForOfCollections(dataList, summaryList) {
@@ -3977,14 +3983,14 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
      * @hidden
      */
     protected get isPercentWidth() {
-        return this._width && this._width.indexOf('%') !== -1;
+        return this.width && this.width.indexOf('%') !== -1;
     }
 
     /**
      * @hidden
      */
     protected get isPercentHeight() {
-        return this._height && this._height.indexOf('%') !== -1;
+        return this.height && this.height.indexOf('%') !== -1;
     }
 
     /**
@@ -3992,15 +3998,15 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
      * Sets this._height
      */
     protected _derivePossibleHeight() {
-        if (!this.isPercentHeight || !this._height || !this.isAttachedToDom || this.rowBasedHeight === 0) {
+        if (!this.isPercentHeight || !this.height || !this.isAttachedToDom || this.rowBasedHeight === 0) {
             return;
         }
         if (!this.nativeElement.parentNode || !this.nativeElement.parentNode.clientHeight) {
             const viewPortHeight = document.documentElement.clientHeight;
-            this._height = this.rowBasedHeight <= viewPortHeight ? null : viewPortHeight.toString();
+            this.height = this.rowBasedHeight <= viewPortHeight ? null : viewPortHeight.toString();
         } else {
             const parentHeight = this.nativeElement.parentNode.getBoundingClientRect().height;
-            this._height = this.rowBasedHeight <= parentHeight ? null : this._height;
+            this.height = this.rowBasedHeight <= parentHeight ? null : this.height;
         }
     }
 
@@ -4044,7 +4050,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
                 (this.allowFiltering && this.filterMode === FilterMode.quickFilter ? FILTER_ROW_HEIGHT : 0) + 1}px`;
         }
         this.summariesHeight = 0;
-        if (!this._height) {
+        if (!this.height) {
             this.calcHeight = null;
             if (this.hasSummarizedColumns && this.rootSummariesEnabled) {
                 this.summariesHeight = this.summaryService.calcMaxSummaryHeight();
@@ -4109,7 +4115,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
                 return this.defaultTargetBodyHeight;
             }
         } else {
-            gridHeight = parseInt(this._height, 10);
+            gridHeight = parseInt(this.height, 10);
         }
         const height = Math.abs(gridHeight - toolbarHeight -
             this.theadRow.nativeElement.offsetHeight -
@@ -4207,7 +4213,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
             width = computed.getPropertyValue('width').indexOf('%') === -1 ?
                 parseInt(computed.getPropertyValue('width'), 10) : null;
         } else {
-            width = parseInt(this._width, 10);
+            width = parseInt(this.width, 10);
         }
 
         if (!width && el) {
@@ -4358,7 +4364,7 @@ export abstract class IgxGridBaseComponent extends DisplayDensityBase implements
     protected getUnpinnedWidth(takeHidden = false) {
         let width = this.isPercentWidth ?
             this.calcWidth :
-            parseInt(this._width, 10);
+            parseInt(this.width, 10);
         if (this.hasVerticalSroll() && !this.isPercentWidth) {
             width -= this.scrollWidth;
         }
